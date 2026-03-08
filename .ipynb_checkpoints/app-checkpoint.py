@@ -3,6 +3,11 @@ Medical AI Application: Chest X-Ray Pathology Detection
 ========================================================
 A Streamlit-based clinical decision support tool for detecting pathologies
 in chest X-ray images using a deep learning model (EfficientNetB4).
+
+This application demonstrates:
+- Clinical workflow integration (image upload → inference → results)
+- Model interpretability via GradCAM visualization
+- Fairness-aware AI (using bias-mitigated model)
 """
 
 import streamlit as st
@@ -15,6 +20,7 @@ import numpy as np
 import cv2
 import os
 
+# Optional: GradCAM for interpretability
 try:
     from pytorch_grad_cam import GradCAMPlusPlus
     from pytorch_grad_cam.utils.image import show_cam_on_image
@@ -22,12 +28,17 @@ try:
 except ImportError:
     GRADCAM_AVAILABLE = False
 
+# =============================================================================
+# Configuration
+# =============================================================================
 IMAGE_SIZE = 380
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# Normalization parameters (ImageNet standards for 3-channel input)
 MEAN = np.array([0.485, 0.456, 0.406])
 STD = np.array([0.229, 0.224, 0.225])
 
+# Available models configuration
 AVAILABLE_MODELS = {
     "EfficientNetB4 (Fair - Bias Mitigated)": {
         "path": "./fair-efficientnetb4-pathology-cxr2.pth",
@@ -40,6 +51,7 @@ AVAILABLE_MODELS = {
         "metrics": {"AUC": 0.763, "Accuracy": 0.690, "F1": 0.660}
     },
 }
+
 
 # =============================================================================
 # Model Loading
@@ -202,8 +214,10 @@ def main():
 
         model_config = AVAILABLE_MODELS[selected_model]
 
+        # Display model info
         st.caption(model_config["description"])
 
+        # Show model metrics
         metrics = model_config["metrics"]
         cols = st.columns(3)
         cols[0].metric("AUC", f"{metrics['AUC']:.3f}")
@@ -216,11 +230,64 @@ def main():
         st.info(f"**Device:** {DEVICE}")
         st.info(f"**Input Size:** {IMAGE_SIZE}x{IMAGE_SIZE}")
 
+        st.divider()
+
+        st.header("🚀 Deployment Trade-offs")
+
+        with st.expander("On-Premises vs Cloud", expanded=True):
+            st.markdown("""
+            **On-Premises Deployment:**
+            - ✅ Full data control & HIPAA compliance
+            - ✅ Low latency for real-time inference
+            - ✅ No internet dependency
+            - ❌ High upfront hardware costs
+            - ❌ Maintenance burden on IT staff
+
+            **Cloud Deployment (AWS/Azure/GCP):**
+            - ✅ Scalable compute resources
+            - ✅ Managed infrastructure (MLOps tools)
+            - ✅ Easy model versioning & updates
+            - ❌ Data privacy concerns (PHI transfer)
+            - ❌ Ongoing operational costs
+            - ❌ Latency for large image files
+            """)
+
+        with st.expander("MLOps Considerations"):
+            st.markdown("""
+            **Model Monitoring:**
+            - Track prediction distribution drift
+            - Monitor performance by demographic subgroups
+            - Alert on confidence score anomalies
+
+            **CI/CD Pipeline:**
+            - Automated model retraining triggers
+            - A/B testing for new model versions
+            - Rollback mechanisms for production
+
+            **Data Pipeline:**
+            - DICOM → PNG preprocessing
+            - Data validation & quality checks
+            - Secure storage with audit trails
+            """)
+
+        with st.expander("Regulatory Compliance"):
+            st.markdown("""
+            **FDA/CE Requirements:**
+            - Clinical validation studies
+            - 510(k) clearance for diagnostic use
+            - Post-market surveillance
+
+            **Data Protection:**
+            - HIPAA (US) / GDPR (EU) compliance
+            - Data anonymization protocols
+            - Access control & audit logging
+            """)
+
     # Main Content - Clinical Workflow
     col1, col2 = st.columns([1, 1])
 
     with col1:
-        st.header("Step 1: Upload X-Ray Image")
+        st.header("📤 Step 1: Upload X-Ray Image")
 
         uploaded_file = st.file_uploader(
             "Upload a chest X-ray image (PNG, JPG, DICOM)",
@@ -233,7 +300,7 @@ def main():
 
         if use_demo:
             demo_images = []
-            demo_dir = "./demo-images"
+            demo_dir = "./MIMIC-CXR-png/files-png"
             if os.path.exists(demo_dir):
                 for root, dirs, files in os.walk(demo_dir):
                     for f in files:
@@ -258,10 +325,10 @@ def main():
             st.image(image, caption="Uploaded X-Ray", use_container_width=True)
         else:
             image = None
-            st.info("Upload an image or select from existing.")
+            st.info("👆 Please upload an image or select demo mode to proceed.")
 
     with col2:
-        st.header("Step 2: AI Analysis")
+        st.header("🔬 Step 2: AI Analysis")
 
         if image is not None:
             # Load model
@@ -273,12 +340,12 @@ def main():
                 display_img = tensor_to_display_image(image_tensor)
 
             # Run inference
-            if st.button("Run Analysis", type="primary", use_container_width=True):
+            if st.button("🚀 Run Analysis", type="primary", use_container_width=True):
                 with st.spinner(f"Running {selected_model} inference..."):
                     results = run_inference(model, image_tensor)
 
                 # Display results
-                st.header("Step 3: Results")
+                st.header("📊 Step 3: Results")
 
                 # Model info badge
                 st.caption(f"**Model:** {selected_model}")
@@ -334,11 +401,35 @@ def main():
                 # Clinical disclaimer
                 st.divider()
                 st.warning("""
-                **Clinical Disclaimer:** This tool is for research and educational purposes only.
-                It is NOT intended for clinical diagnosis.
+                ⚠️ **Clinical Disclaimer:** This tool is for research and educational purposes only.
+                It is NOT intended for clinical diagnosis. All findings should be reviewed and
+                confirmed by qualified healthcare professionals. The model's predictions should
+                be considered as a second opinion to support, not replace, clinical judgment.
                 """)
         else:
             st.info("Upload an image to begin analysis.")
+
+    # Footer
+    st.divider()
+    st.markdown("""
+    ---
+    **About This Application**
+
+    This prototype demonstrates a medical AI application built with:
+    - **Models:** EfficientNetB4 (with/without fairness adjustments)
+    - **Framework:** PyTorch + Streamlit
+    - **Fairness:** Option to use bias-mitigated model (trained with oversampling)
+    - **Interpretability:** GradCAM++ visualization for explainable AI
+
+    **Available Models:**
+    | Model | Description |
+    |-------|-------------|
+    | EfficientNetB4 (Fair) | Bias-mitigated for clinical subgroups (PA/AP, portable) |
+    | EfficientNetB4 (Original) | Standard training on MIMIC-CXR |
+
+    *Developed as part of the AI for Medical Diagnosis course.*
+    """)
+
 
 if __name__ == "__main__":
     main()
